@@ -1,7 +1,1 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed May 13 23:19:22 2026
-
-@author: dkqk2
-"""
-
+# 패키지 초기화 파일

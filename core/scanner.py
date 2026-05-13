@@ -2,20 +2,7 @@
 import os
 import pandas as pd
 from utils.config import Config
-
-def load_strategy_logic():
-    """
-    strategy/my_private_logic.txt 파일을 읽어옵니다.
-    """
-    # .txt 확장자를 명시적으로 지정
-    logic_path = Config.BASE_DIR / "strategy" / "my_private_logic.txt"
-    
-    if not os.path.exists(logic_path):
-        print(f"❌ 전략 로직 파일을 찾을 수 없습니다: {logic_path}")
-        return None
-            
-    with open(logic_path, "r", encoding="utf-8") as f:
-        return f.read()
+from strategy.logic_loader import load_strategy_logic  # 명시적 임포트
 
 def scan_tickers():
     """
@@ -27,16 +14,18 @@ def scan_tickers():
             {
                 'ticker': str (예: '005930.KS'),
                 'price': float (현재가/종가),
-                'date': str (시그널 발생 날짜 'YYYY-MM-DD'),
-                'name': str (종목명, 필요 시 매핑)
+                'date': str (시그널 발생 날짜 'YYYY-MM-DD')
             },
             ...
         ]
     """
     data_dir = Config.get_path("DATA_DIR")
-    logic_code = load_strategy_logic()
+    
+    # strategy/logic_loader.py의 함수를 사용하여 로직 코드를 가져옴
+    logic_code = load_strategy_logic("my_private_logic.txt")
     
     if not logic_code:
+        print("❌ 실행 가능한 전략 로직이 없습니다.")
         return []
 
     signals = []
@@ -52,13 +41,14 @@ def scan_tickers():
         file_path = data_dir / file_name
         
         try:
-            # 1. 데이터 로드 (최소 분석 기간 확보를 위해 전체 로드)
+            # 1. 데이터 로드
             df = pd.read_csv(file_path, index_col=0, parse_dates=True)
             
             if len(df) < 20: 
                 continue
                 
             # 2. 전략 로직 실행
+            # 로더에서 가져온 logic_code를 exec()로 실행하여 df에 Signal 컬럼 생성
             local_vars = {'df': df}
             exec(logic_code, {}, local_vars)
             df = local_vars['df']
