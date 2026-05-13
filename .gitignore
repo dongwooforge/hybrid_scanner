@@ -1,0 +1,35 @@
+# --- [보안 및 설정] ---
+.env
+.venv/
+env/
+my_private_logic*
+*.txt
+!requirements.txt
+!README.md
+
+# --- [데이터 저장소 (중요)] ---
+# 모든 시장의 데이터와 리포트를 제외합니다.
+storage/**/raw_data/
+storage/**/reports/
+# 특정 종목 리스트는 프로젝트 관리를 위해 포함하고 싶다면 아래 라인을 주석 처리하세요.
+storage/**/ticker_list.txt
+
+# --- [파이썬 관련] ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.python-version
+
+# --- [IDE 및 에디터] ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.spyproject/
+.spyderproject/
+
+# --- [시스템 및 로그] ---
+*.log
+.DS_Store
+Thumbs.db
