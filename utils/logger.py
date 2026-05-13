@@ -1,7 +1,18 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed May 13 23:19:45 2026
+import logging
+from utils.config import Config
 
-@author: dkqk2
-"""
+def setup_logger():
+    log_path = Config.BASE_DIR / "storage" / "system.log"
+    
+    # storage 폴더가 없을 경우 대비
+    log_path.parent.mkdir(parents=True, exist_ok=True)
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler(log_path, encoding='utf-8'),
+            logging.StreamHandler() # 콘솔에도 출력
+        ]
+    )
+    return logging.getLogger("HybridScanner")
