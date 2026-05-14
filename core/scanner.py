@@ -4,6 +4,48 @@ import pandas as pd
 from utils.config import Config
 from strategy.logic_loader import load_strategy_logic  # 명시적 임포트
 
+
+"""
+================================================================================
+[ MODULE : core/scanner.py ]
+- 역할: 저장된 CSV 데이터를 순회하며 외부 전략 로직(.txt)을 실행, 매수 시그널 포착
+- 연계: strategy/logic_loader.py(로직 공급), storage/(데이터 읽기)
+================================================================================
+1. INPUT (입력)
+   - Data Source: storage/{MARKET_MODE} 내의 모든 _{INTERVAL}.csv 파일들
+   - Strategy: strategy/my_private_logic.txt (사용자 정의 매매 조건문)
+
+
+================================================================================
+2. OUTPUT (출력)
+   - Return Value: list of dict
+     ㄴ 구조: [{'ticker': '005930.KS', 'name': '삼성전자', 'price': 72000, ...}]
+================================================================================
+
+
+3. 연계 작용 (Data Flow)
+   - [IN]  strategy/logic_loader -> 텍스트 형태의 파이썬 전략 코드를 읽어옴
+   - [IN]  storage/ -> 저장된 과거 시세 데이터를 Pandas DataFrame으로 로드
+   - [PROCESS] exec() -> 읽어온 전략 코드를 데이터프레임 위에서 실행하여 'Signal' 열 생성
+   - [OUT] ui/threads.py -> 포착된 종목 정보를 UI 리스트에 전달 (다음 공정)
+================================================================================
+"""
+
+
+def get_ticker_name_map():
+    """
+    ticker_list.txt를 읽어 {티커: 종목명} 딕셔너리를 생성합니다.
+    """
+    ticker_file = Config.get("TICKER_FILE")
+    name_map = {}
+    if ticker_file.exists():
+        with open(ticker_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                parts = line.strip().split(',')
+                if len(parts) >= 2:
+                    name_map[parts[0]] = parts[1]
+    return name_map
+
 def scan_tickers():
     """
     현재 시장 모드의 데이터 폴더를 스캔하여 시그널 종목을 반환합니다.
@@ -57,11 +99,12 @@ def scan_tickers():
             if 'Signal' not in df.columns:
                 print(f"⚠️ {ticker}: 로직 내에 'Signal' 컬럼 정의가 없습니다.")
                 continue
-                
+            name_map = get_ticker_name_map() # 매핑 데이터 로드    
             last_row = df.iloc[-1]
             if last_row['Signal'] == True:
                 signals.append({
                     'ticker': ticker,
+                    'name': name_map.get(ticker, "N/A"),
                     'price': round(float(last_row['Close']), 2),
                     'date': df.index[-1].strftime('%Y-%m-%d')
                 })

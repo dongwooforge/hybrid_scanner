@@ -28,18 +28,19 @@ def run_cli_pipeline():
 
     # 4. 결과 분석 및 리포트 생성
     print(f"\n--- 📊 최종 리포트 ({len(detected_list)} 종목 포착) ---")
-    print("-" * 60)
-    print(f"{'티커':<12} | {'현재가':<10} | {'최적TP':<6} | {'최적SL':<6} | {'예상수익'}")
-    print("-" * 60)
+    print("-" * 85)
+    print(f"{'티커':<12} | {'종목명':<15} | {'현재가':<10} | {'최적TP':<6} | {'최적SL':<6} | {'예상수익'}")
+    print("-" * 85)
 
     for item in detected_list:
         ticker = item['ticker']
-        # 초고속 벡터 최적화 실행
+        name = item.get('name', 'N/A') # 종목명 가져오기
         opt_res = optimize_vectorized(ticker)
         
         if opt_res:
-            print(f"{ticker:<12} | {item['price']:>10,.0f} | {opt_res['best_tp']:>5}% | "
-                  f"{opt_res['best_sl']:>5}% | {opt_res['max_return']:>7}%")
+            # 종목명은 한글 특성상 정렬이 깨질 수 있으므로 글자 수 조절
+            print(f"{ticker:<12} | {name[:10]:<15} | {item['price']:>10,.0f} | "
+                  f"{opt_res['best_tp']:>5}% | {opt_res['best_sl']:>5}% | {opt_res['max_return']:>7}%")
     
     print("-" * 60)
     print("✅ 모든 분석이 완료되었습니다.")

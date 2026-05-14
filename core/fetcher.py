@@ -6,6 +6,29 @@ from datetime import datetime, timedelta
 from utils.config import Config
 import time
 import sys
+import pandas as pd
+
+
+"""
+================================================================================
+[ MODULE : core/fetcher.py ]
+- 역할: 온라인(Yahoo/FDR) 주가 데이터를 수집하여 로컬 storage에 증분 저장(Incremental Update)
+- 연계: utils/config(경로/설정), storage/(데이터 배출)
+================================================================================
+1. INPUT (입력)
+   - Ticker: str (예: 'AAPL', '005930.KS')
+   - 기존 파일 존재 여부: storage/{MARKET}/{TICKER}.csv 확인
+
+2. OUTPUT (출력)
+   - File Path: storage/{MARKET_MODE}/{TICKER}_{INTERVAL}.csv
+   - Process: 신규 데이터와 기존 데이터 병합(Merge) 후 중복 제거(Drop Duplicates)
+
+3. 연계 작용 (Data Flow)
+   - [IN]  Local Storage: 기존에 저장된 데이터의 마지막 날짜(Last Date) 확인
+   - [FETCH] Online: (Last Date - 1일)부터 오늘까지의 최신 데이터만 요청
+   - [OUT] Local Storage: 병합된 최종 데이터를 다시 동일 경로에 덮어쓰기
+================================================================================
+"""
 
 
 def update_ticker_list():
@@ -44,40 +67,66 @@ def update_ticker_list():
         return False
 
 
+
+
+
+
 def get_data_fetcher(ticker):
     """
-    시장 모드에 따라 적절한 데이터 수집 함수를 실행하고 저장합니다.
+    증분 업데이트(Incremental Update) 방식으로 데이터를 수집합니다.
+    기존 데이터가 있으면 마지막 날짜부터 수집하여 합칩니다.
     """
     mode = Config.MARKET_MODE
-    # Config에서 경로를 가져오고, 없으면 자동 생성
     save_dir = Config.get_path("DATA_DIR")
     save_path = save_dir / f"{ticker}_{Config.get('INTERVAL')}.csv"
     
-    try:
-        if mode == "KR":
-            # 한국 시장: FinanceDataReader 사용 (일봉 기준)
-            # 종료일은 오늘+1일로 설정하여 오늘 데이터 누락 방지
-            end_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-            start_date = (datetime.now() - timedelta(days=365*2)).strftime('%Y-%m-%d') # 2년치
-            
-            df = fdr.DataReader(ticker.split('.')[0], start=start_date, end=end_date)
-            
-        elif mode == "US":
-            # 미국 시장: yfinance 사용 (4시간봉 등 정밀 설정 가능)
-            ytick = yf.Ticker(ticker)
-            df = ytick.history(period="2y", interval=Config.get("INTERVAL"))
-            
-        if df is None or df.empty:
-            raise ValueError(f"데이터가 비어있습니다. (Ticker: {ticker})")
+    # 1. 기존 데이터 확인 및 시작 날짜 설정
+    start_date = (datetime.now() - timedelta(days=365*2)).strftime('%Y-%m-%d') # 기본 2년
+    existing_df = None
+    
+    if save_path.exists():
+        try:
+            existing_df = pd.read_csv(save_path, index_col=0, parse_dates=True)
+            if not existing_df.empty:
+                # 마지막 날짜로부터 1일 전부터 수집 (장중 데이터 갱신을 위함)
+                last_date = existing_df.index[-1]
+                start_date = (last_date - timedelta(days=1)).strftime('%Y-%m-%d')
+        except Exception as e:
+            print(f"⚠️ {ticker} 기존 파일 로드 실패(새로 수집): {e}")
 
-        # 데이터 저장 (Index는 Date)
-        df.to_csv(save_path)
-        return True, f"{ticker} 저장 완료"
+    try:
+        end_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        new_df = None
+
+        # 2. 신규 데이터 수집
+        if mode == "KR":
+            new_df = fdr.DataReader(ticker.split('.')[0], start=start_date, end=end_date)
+        elif mode == "US":
+            ytick = yf.Ticker(ticker)
+            new_df = ytick.history(start=start_date, end=end_date, interval=Config.get("INTERVAL"))
+            
+        if new_df is None or new_df.empty:
+            if existing_df is not None: # 신규 데이터가 없어도 기존 데이터가 있으면 유지
+                return True, f"{ticker} (신규 데이터 없음)"
+            raise ValueError("수집된 데이터가 없습니다.")
+
+        # 3. 데이터 병합 및 중복 제거
+        if existing_df is not None:
+            # 합치기: 기존 데이터 + 신규 데이터
+            combined_df = pd.concat([existing_df, new_df])
+            # 중복 제거: Index(날짜) 기준으로 마지막에 들어온 데이터(신규)를 우선함
+            combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+            combined_df.sort_index(inplace=True)
+            final_df = combined_df
+        else:
+            final_df = new_df
+
+        # 4. 저장
+        final_df.to_csv(save_path)
+        return True, f"{ticker} 업데이트 완료"
 
     except Exception as e:
-        # 에러 발생 시 상세 원인 반환
-        error_msg = f"❌ [{ticker}] 수집 실패: {str(e)}"
-        return False, error_msg
+        return False, f"❌ [{ticker}] 수집 실패: {str(e)}"
 
 
 
@@ -138,3 +187,9 @@ if __name__ == "__main__":
     print(f"--- {test_ticker} 데이터 수집 테스트 시작 ---")
     success, result = get_data_fetcher(test_ticker)
     print(result)
+    
+    
+    
+    
+    
+    
